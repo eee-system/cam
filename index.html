@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>EEE カメラ</title>
+<style>
+  /* ---- EEE の運転台と同じトンマナ（ロガーと共通） ---- */
+  :root{ --panel:#2a2c2b; --ink:#e8e8e8; --sub:#b9bdb6; --lcd:#0c0d0d; --lcdg:#9fd6a3; --lcdg2:#7e9a80; --amber:#f0b04a; --red:#e03a2f; --green:#4fd66a }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent }
+  html,body{ margin:0; min-height:100% }
+  body{ background:#111312; font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; font-size:14px; line-height:1.45; color:var(--ink); padding:max(10px,env(safe-area-inset-top)) 10px max(14px,env(safe-area-inset-bottom)) }
+  .cab{ max-width:430px; margin:0 auto; background:linear-gradient(180deg,#303332,#252726); border-radius:14px; padding:12px 12px 14px; box-shadow:0 4px 14px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08); border:1px solid #141515 }
+  .head{ display:flex; align-items:center; gap:10px; margin-bottom:10px }
+  .head .plate{ background:#f3f1ea; color:#111; font:800 13px/1 "Helvetica Neue",Arial,sans-serif; letter-spacing:.14em; padding:6px 10px; border-radius:3px; box-shadow:inset 0 0 0 1px #999 }
+  .head .ttl{ font-size:11px; letter-spacing:.3em; color:var(--sub) } .head .sp{ flex:1 }
+  .pl{ font-size:9px; letter-spacing:.24em; color:var(--sub); text-shadow:0 1px 0 #000; margin:12px 2px 5px }
+  .disp{ position:relative; background:#111313; border:9px solid #1e1f21; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,.55), inset 0 0 0 1px #070808; color:#dfe6dc; padding:8px 10px; overflow:hidden }
+  .disp::after{ content:""; position:absolute; inset:0; pointer-events:none; border-radius:2px; background:radial-gradient(140% 90% at 18% -20%, rgba(255,255,255,.085), rgba(255,255,255,.03) 40%, rgba(255,255,255,0) 70%), radial-gradient(rgba(255,255,255,.028) 0.6px, transparent 0.7px); background-size:100% 100%, 2px 2px }
+  .stat{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px }
+  .stat .disp{ text-align:center; padding:6px 4px } .stat .k{ font-size:9px; letter-spacing:.2em; color:var(--lcdg2) } .stat .v{ font:600 17px ui-monospace,Menlo,monospace; color:var(--amber); font-variant-numeric:tabular-nums }
+  /* モード切替（ロッカースイッチ風） */
+  .mode{ display:grid; grid-template-columns:1fr 1fr; gap:0; border:1px solid #121313; border-radius:8px; overflow:hidden; box-shadow:0 2px 0 #0a0a0a }
+  .mode button{ font:13px -apple-system,"Hiragino Sans",sans-serif; color:var(--sub); background:linear-gradient(180deg,#3a3d3c,#262827); border:0; padding:11px 0; letter-spacing:.06em }
+  .mode button.sel{ background:linear-gradient(180deg,#5a3a2a,#3a2418); color:#ffd9b0; box-shadow:inset 0 2px 4px rgba(0,0,0,.6) }
+  #view{ margin-top:8px; padding:0; aspect-ratio:4/3; background:#000 } #view video{ width:100%; height:100%; object-fit:cover; display:block }
+  #view .ts{ position:absolute; left:8px; bottom:6px; font:11px ui-monospace,Menlo,monospace; color:var(--amber); z-index:5; text-shadow:0 1px 2px #000 }
+  #view .n{ position:absolute; right:8px; top:6px; font:11px ui-monospace,Menlo,monospace; color:var(--amber); z-index:5; text-shadow:0 1px 2px #000 }
+  .btnrow{ display:grid; grid-template-columns:110px 1fr; gap:10px; align-items:center }
+  .rb{ display:flex; flex-direction:column; align-items:center; gap:6px; cursor:pointer; user-select:none; background:none; border:0; padding:0; color:var(--ink); font:inherit }
+  .rb .cap{ width:58px; height:58px; border-radius:50%; background:radial-gradient(circle at 40% 32%, #8c949e, #4a5058 60%, #2a2e33); box-shadow:0 4px 6px rgba(0,0,0,.7), inset 0 2px 0 rgba(255,255,255,.35), inset 0 -3px 5px rgba(0,0,0,.5) }
+  .rb.big .cap{ width:84px; height:84px; background:radial-gradient(circle at 40% 32%, #f36b5e, #b8261c 60%, #6e140f) }
+  .rb.big.on .cap{ background:radial-gradient(circle at 40% 32%, #ff8a7e, #d63a2e 60%, #8a1a12); box-shadow:0 0 22px rgba(255,80,60,.55), 0 4px 6px rgba(0,0,0,.7), inset 0 2px 0 rgba(255,255,255,.35) }
+  .rb:active .cap{ transform:translateY(2px); box-shadow:0 2px 3px rgba(0,0,0,.7), inset 0 2px 0 rgba(255,255,255,.25) }
+  .rb .t{ font-size:10px; letter-spacing:.1em; color:var(--ink); text-shadow:0 1px 0 #000 } .rb[disabled]{ opacity:.45; pointer-events:none }
+  .led{ display:inline-block; width:9px; height:9px; border-radius:50%; background:#3a3f3b; border:1px solid #111; vertical-align:middle; box-shadow:inset 0 1px 1px rgba(0,0,0,.6) } .led.on{ background:var(--red); box-shadow:0 0 8px var(--red) }
+  table{ width:100%; border-collapse:collapse; font:12px ui-monospace,Menlo,monospace } td{ padding:3px 0; color:#b9c8b5 } td:first-child{ width:52%; font-family:-apple-system,"Hiragino Sans",sans-serif; font-size:11px } td:last-child{ text-align:right; color:var(--amber); font-variant-numeric:tabular-nums }
+  input[type=text]{ font:13px ui-monospace,Menlo,monospace; width:100%; background:var(--lcd); color:var(--lcdg); border:2px solid #1c1e1f; border-radius:3px; box-shadow:inset 0 0 8px #000; padding:9px 10px; margin-bottom:10px; -webkit-appearance:none }
+  .status{ margin-top:12px; background:var(--lcd); border:2px solid #1c1e1f; border-radius:3px; box-shadow:inset 0 0 8px #000; padding:7px 10px; font-size:12px; min-height:2.6em; color:var(--lcdg); line-height:1.5 } .status.err{ color:#ff8f86 }
+  .hint{ font-size:10.5px; color:var(--sub); line-height:1.6; margin-top:8px }
+  body.live .logonly{ display:none } body.log .liveonly{ display:none }
+</style>
+
+<div class="cab">
+  <div class="head"><span class="plate">EEE</span><span class="ttl">CAMERA</span><span class="sp"></span><span class="led" id="led"></span></div>
+
+  <div class="stat">
+    <div class="disp"><div class="k">状態</div><div class="v" id="sSt">待機</div></div>
+    <div class="disp"><div class="k">コマ</div><div class="v" id="sN">0</div></div>
+    <div class="disp"><div class="k">時間</div><div class="v" id="sT">0:00</div></div>
+  </div>
+
+  <div class="pl">モード</div>
+  <div class="mode"><button id="mLive" class="sel">リアルタイム送信</button><button id="mLog">ログ（端末に記録）</button></div>
+  <div class="hint liveonly">Mac の EEE に 0.5 秒 1 コマで送ります。Mac 側が REC 中なら記録にも入ります（送り先: <span id="host"></span>）</div>
+  <div class="hint logonly">Mac 不要。端末内に 0.5 秒 1 コマで積み、あとで .eeecam として書き出します。1 コマごとに時刻（時計）が付くので、センサーログとは時刻で合います</div>
+
+  <div class="disp" id="view"><video id="v" playsinline muted autoplay></video><span class="n" id="vN"></span><span class="ts" id="vTs">--:--:--.-</span></div>
+
+  <div class="pl">撮影</div>
+  <div class="btnrow">
+    <button class="rb big" id="rec"><div class="cap"></div><span class="t">開始／停止</span></button>
+    <div class="disp"><table>
+      <tr><td>コマの大きさ</td><td id="rSz">480 px</td></tr>
+      <tr><td>1 コマ</td><td id="rKb">—</td></tr>
+      <tr><td class="logonly">端末内の容量</td><td class="logonly" id="rMb">—</td></tr>
+      <tr><td class="liveonly">送信の遅れ</td><td class="liveonly" id="rLag">—</td></tr>
+    </table></div>
+  </div>
+
+  <div class="logonly">
+    <div class="pl">書き出し</div>
+    <input type="text" id="logName" placeholder="記録の名前">
+    <div class="btnrow" style="grid-template-columns:1fr 1fr">
+      <button class="rb" id="save" disabled><div class="cap"></div><span class="t">書き出し (.eeecam)</span></button>
+      <button class="rb" id="clear" disabled><div class="cap"></div><span class="t">破棄</span></button>
+    </div>
+    <div class="hint">書き出した .eeecam を Mac の EEE（/inside か /map）にドロップすると replay/logs/ に入り、同じ時間帯のセンサーログを再生したとき自動で一緒に出ます（名前を揃える必要なし）。<br>
+      全線 30 分で 3,600 コマ・60〜80MB。撮影中は画面を消さないこと。iPhone の時計が合っていること（自動設定なら OK）。</div>
+  </div>
+
+  <div class="status" id="msg">「開始」を押すとカメラの許可を求めます。スマホは窓に向けて固定。センサー用のスマホとは別の端末で使えます。</div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var $ = function(id){ return document.getElementById(id); };
+  var W = 480, mode = /github\.io$/i.test(location.hostname) ? 'log' : 'live', running = false, stream = null, timer = null, t0 = 0, t0Epoch = 0, n = 0, bytes = 0, lastKb = 0, busy = false, cw = 0, ch = 0;
+  var canvas = document.createElement('canvas'), idb = null;
+  $('host').textContent = location.host;
+  // Mac の EEE から配られていないとき（GitHub Pages など）は送り先が無いので「ログ」だけ
+  var STANDALONE = /github\.io$/i.test(location.hostname) || location.protocol === 'file:';
+  if (STANDALONE){ $('mLive').style.display = 'none'; document.querySelector('.mode').style.gridTemplateColumns = '1fr'; }
+  document.body.classList.add(STANDALONE ? 'log' : 'live');
+
+  function msg(t, cls){ var m = $('msg'); m.textContent = t; m.className = 'status' + (cls ? ' ' + cls : ''); }
+  function setMode(m){ if (running) return; if (STANDALONE) m = 'log'; mode = m; document.body.classList.remove('live', 'log'); document.body.classList.add(m); $('mLive').classList.toggle('sel', m === 'live'); $('mLog').classList.toggle('sel', m === 'log'); }
+  $('mLive').onclick = function(){ setMode('live'); }; $('mLog').onclick = function(){ setMode('log'); };
+
+  // 名前欄（ログ）: 時刻を自動で
+  var lastAuto = '';
+  function stampName(force){ var v = $('logName').value; if (!force && v && v !== lastAuto) return; var d = new Date(), p2 = function(x){ return (x < 10 ? '0' : '') + x; }; lastAuto = 'cam_' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + '_' + p2(d.getHours()) + p2(d.getMinutes()); $('logName').value = lastAuto; }
+  stampName(true);
+
+  /* IndexedDB（ログ）: コマをそのまま積む。ブラウザが落ちても残る */
+  (function(){
+    try {
+      var rq = indexedDB.open('eee-cam', 1);
+      rq.onupgradeneeded = function(){ rq.result.createObjectStore('frames', { autoIncrement: true }); };
+      rq.onsuccess = function(){ idb = rq.result; try { var c = idb.transaction('frames', 'readonly').objectStore('frames').count(); c.onsuccess = function(){ if (c.result > 0){ n = c.result; $('sN').textContent = n; $('save').disabled = $('clear').disabled = false; msg('前回の記録（' + n + ' コマ）が残っています。「書き出し」で保存するか「破棄」してください。'); } }; } catch(_){} };
+    } catch(_){}
+  })();
+  function frames(mode2){ return idb.transaction('frames', mode2).objectStore('frames'); }
+
+  function fmtTs(ms){ var d = new Date(ms), p2 = function(x){ return (x < 10 ? '0' : '') + x; }; return p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()) + '.' + Math.floor(d.getMilliseconds() / 100); }
+  setInterval(function(){ $('vTs').textContent = fmtTs(Date.now()); if (running){ var s = Math.floor((performance.now() - t0) / 1000); $('sT').textContent = Math.floor(s / 60) + ':' + (s % 60 < 10 ? '0' : '') + (s % 60); } }, 100);
+
+  function shot(){
+    if (!running || !stream) return;
+    var v = $('v'); if (!v.videoWidth) return;
+    var w = W, h = Math.round(w * v.videoHeight / v.videoWidth); cw = w; ch = h;
+    canvas.width = w; canvas.height = h; canvas.getContext('2d').drawImage(v, 0, 0, w, h);
+    var ts = Date.now(), tRel = Math.round(performance.now() - t0);
+    canvas.toBlob(function(b){
+      if (!b) return; lastKb = b.size / 1024; $('rKb').textContent = lastKb.toFixed(0) + ' KB';
+      if (mode === 'log'){
+        if (!idb) return;
+        try { frames('readwrite').add({ ts: ts, t: tRel, w: w, h: h, blob: b }); n++; bytes += b.size; if (n % 2 === 0){ $('sN').textContent = n; $('vN').textContent = n; $('rMb').textContent = (bytes / 1048576).toFixed(0) + ' MB'; } } catch(_){}
+      } else {
+        if (busy) return; busy = true; var t1 = performance.now();
+        fetch('/cam-live?ts=' + ts + '&w=' + w + '&h=' + h, { method: 'POST', body: b }).then(function(r){ if (!r.ok) throw new Error(r.status); n++; $('sN').textContent = n; $('vN').textContent = n; $('rLag').textContent = Math.round(performance.now() - t1) + ' ms'; $('led').classList.add('on'); })
+          .catch(function(){ $('rLag').textContent = '届かない'; $('led').classList.remove('on'); }).then(function(){ busy = false; });
+      }
+    }, 'image/jpeg', 0.6);
+  }
+
+  function start(){
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ msg('この端末ではカメラが使えません。', 'err'); return; }
+    if (!window.isSecureContext){ msg('HTTPS で開いてください（カメラの許可が出ません）', 'err'); return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false }).then(function(st){
+      stream = st; $('v').srcObject = st;
+      running = true; t0 = performance.now(); t0Epoch = Date.now(); n = 0; bytes = 0;
+      if (mode === 'log'){ try { frames('readwrite').clear(); } catch(_){} $('save').disabled = $('clear').disabled = true; }
+      timer = setInterval(shot, 500);
+      $('rec').classList.add('on'); $('sSt').textContent = mode === 'log' ? 'REC' : '送信'; if (mode === 'log') $('led').classList.add('on');
+      $('mLive').disabled = $('mLog').disabled = true;
+      if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function(){});
+      msg(mode === 'log' ? '記録中。0.5 秒に 1 コマ、時刻つき。' : 'Mac へ送信中。中身ページのビューワーを「車載カメラ」にすると映ります。');
+    }).catch(function(err){ msg('カメラの許可が得られません: ' + err.message, 'err'); });
+  }
+  function stop(){
+    running = false; if (timer){ clearInterval(timer); timer = null; } if (stream){ stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; }
+    $('rec').classList.remove('on'); $('led').classList.remove('on'); $('sSt').textContent = '停止'; $('mLive').disabled = $('mLog').disabled = false;
+    if (mode === 'log'){ $('save').disabled = $('clear').disabled = n === 0; stampName(); msg(n + ' コマ記録しました（' + (bytes / 1048576).toFixed(0) + 'MB）。「書き出し」で .eeecam を保存してください。'); }
+    else msg(n + ' コマ送りました。');
+  }
+  $('rec').onclick = function(){ if (running) stop(); else start(); };
+  document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible' && running && 'wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function(){}); });
+
+  /* 書き出し: "EEECAM1\n" + 索引 { v:2, w, h, t0: 開始時刻(epoch ms), frames:[[tRel, off, len], ...] } + JPEG の連結。
+     絶対時刻 = t0 + tRel。センサーログとは絶対時刻で合わせる（名前は関係ない） */
+  $('save').onclick = function(){
+    if (!idb) return;
+    var idx = [], parts = [], off = 0, w = cw, h = ch, first = null;
+    var cur = frames('readonly').openCursor();
+    cur.onsuccess = function(){
+      var c = cur.result;
+      if (c){ var r = c.value; if (first === null) first = r.ts - r.t; idx.push([r.t, off, r.blob.size]); parts.push(r.blob); off += r.blob.size; w = r.w || w; h = r.h || h; c.continue(); return; }
+      if (!idx.length){ msg('コマがありません。', 'err'); return; }
+      var head = 'EEECAM1\n' + JSON.stringify({ v: 2, w: w, h: h, t0: first, frames: idx }) + '\n';
+      var blob = new Blob([head].concat(parts), { type: 'application/octet-stream' });
+      var name = (($('logName').value || '').trim() || 'cam').replace(/[\\/:*?"<>|\s]+/g, '_');
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name + '.eeecam';
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 8000);
+      msg(idx.length + ' コマ（' + (off / 1048576).toFixed(0) + 'MB）。共有シートで「ファイルに保存」か AirDrop → EEE の /inside か /map にドロップ。');
+    };
+  };
+  $('clear').onclick = function(){ if (!confirm('記録を破棄します。よろしいですか？')) return; try { frames('readwrite').clear(); } catch(_){} n = 0; bytes = 0; $('sN').textContent = '0'; $('vN').textContent = ''; $('save').disabled = $('clear').disabled = true; msg('破棄しました。'); };
+})();
+</script>
+</html>
