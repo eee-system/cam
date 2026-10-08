@@ -28,6 +28,9 @@
   #view .ts{ position:absolute; left:8px; bottom:6px; font:11px ui-monospace,Menlo,monospace; color:var(--amber); z-index:5; text-shadow:0 1px 2px #000 }
   #view .n{ position:absolute; right:8px; top:6px; font:11px ui-monospace,Menlo,monospace; color:var(--amber); z-index:5; text-shadow:0 1px 2px #000 }
   .btnrow{ display:grid; grid-template-columns:110px 1fr; gap:10px; align-items:center }
+  .btnrow.two{ grid-template-columns:1fr 1fr; align-items:start; margin-bottom:8px } .btnrow.one{ grid-template-columns:1fr }
+  .rb .u{ font-size:9px; color:var(--sub); letter-spacing:.06em; margin-top:-2px } .rb.big .t{ font-size:12px; font-weight:700 }
+  .rb.fin .cap{ background:radial-gradient(circle at 40% 32%, #7f8a97, #3f4650 60%, #22272d) }   /* 停止: 黒いボタン。記録を終えて書き出す */
   .rb{ display:flex; flex-direction:column; align-items:center; gap:6px; cursor:pointer; user-select:none; background:none; border:0; padding:0; color:var(--ink); font:inherit }
   .rb .cap{ width:58px; height:58px; border-radius:50%; background:radial-gradient(circle at 40% 32%, #8c949e, #4a5058 60%, #2a2e33); box-shadow:0 4px 6px rgba(0,0,0,.7), inset 0 2px 0 rgba(255,255,255,.35), inset 0 -3px 5px rgba(0,0,0,.5) }
   .rb.big .cap{ width:84px; height:84px; background:radial-gradient(circle at 40% 32%, #f36b5e, #b8261c 60%, #6e140f) }
@@ -59,8 +62,11 @@
   <div class="disp" id="view"><video id="v" playsinline muted autoplay></video><span class="n" id="vN"></span><span class="ts" id="vTs">--:--:--.-</span></div>
 
   <div class="pl">撮影</div>
-  <div class="btnrow">
-    <button class="rb big" id="rec"><div class="cap"></div><span class="t">開始／一時停止</span></button>
+  <div class="btnrow two">
+    <button class="rb big" id="rec"><div class="cap"></div><span class="t" id="recT">記録</span><small class="u">記録／一時停止</small></button>
+    <button class="rb big fin logonly" id="fin"><div class="cap"></div><span class="t" id="finT">記録</span><small class="u">停止／記録</small></button>
+  </div>
+  <div class="btnrow one">
     <div class="disp"><table>
       <tr><td>コマの大きさ</td><td id="rSz">480 px</td></tr>
       <tr><td>1 コマ</td><td id="rKb">—</td></tr>
@@ -74,7 +80,7 @@
     <input type="text" id="logName" placeholder="記録の名前">
     <div class="btnrow" style="grid-template-columns:1fr 1fr">
       <button class="rb" id="save" disabled><div class="cap"></div><span class="t">書き出し (.eeecam)</span></button>
-      <button class="rb" id="clear" disabled><div class="cap"></div><span class="t">破棄（新しい記録へ）</span></button>
+      <button class="rb" id="clear" disabled><div class="cap"></div><span class="t">破棄</span></button>
     </div>
     <div class="hint">書き出した .eeecam を Mac の EEE（/inside か /map）にドロップすると replay/logs/ に入り、同じ時間帯のセンサーログを再生したとき自動で一緒に出ます（名前を揃える必要なし）。<br>
       全線 30 分で 3,600 コマ・60〜80MB。撮影中は画面を消さないこと。iPhone の時計が合っていること（自動設定なら OK）。</div>
@@ -87,7 +93,7 @@
 (function(){
   'use strict';
   var $ = function(id){ return document.getElementById(id); };
-  var W = 480, mode = /github\.io$/i.test(location.hostname) ? 'log' : 'live', running = false, stream = null, timer = null, t0 = 0, t0Epoch = 0, n = 0, bytes = 0, lastKb = 0, busy = false, cw = 0, ch = 0;
+  var W = 480, mode = /github\.io$/i.test(location.hostname) ? 'log' : 'live', running = false, finished = false, stream = null, timer = null, t0 = 0, t0Epoch = 0, n = 0, bytes = 0, lastKb = 0, busy = false, cw = 0, ch = 0;
   var canvas = document.createElement('canvas'), idb = null;
   $('host').textContent = location.host;
   // Mac の EEE から配られていないとき（GitHub Pages など）は送り先が無いので「ログ」だけ
@@ -98,6 +104,7 @@
   function msg(t, cls){ var m = $('msg'); m.textContent = t; m.className = 'status' + (cls ? ' ' + cls : ''); }
   function setMode(m){ if (running) return; if (STANDALONE) m = 'log'; mode = m; document.body.classList.remove('live', 'log'); document.body.classList.add(m); $('mLive').classList.toggle('sel', m === 'live'); $('mLog').classList.toggle('sel', m === 'log'); }
   $('mLive').onclick = function(){ setMode('live'); }; $('mLog').onclick = function(){ setMode('log'); };
+  setTimeout(function(){ updateButtons(); }, 0);
 
   // 名前欄（ログ）: 時刻を自動で
   var lastAuto = '';
@@ -109,7 +116,7 @@
     try {
       var rq = indexedDB.open('eee-cam', 1);
       rq.onupgradeneeded = function(){ rq.result.createObjectStore('frames', { autoIncrement: true }); };
-      rq.onsuccess = function(){ idb = rq.result; try { var c = idb.transaction('frames', 'readonly').objectStore('frames').count(); c.onsuccess = function(){ if (c.result > 0){ n = c.result; $('sN').textContent = n; $('save').disabled = $('clear').disabled = false; msg('前回の記録（' + n + ' コマ）が残っています。「書き出し」で保存するか「破棄」してください。'); } }; } catch(_){} };
+      rq.onsuccess = function(){ idb = rq.result; try { var c = idb.transaction('frames', 'readonly').objectStore('frames').count(); c.onsuccess = function(){ if (c.result > 0){ n = c.result; $('sN').textContent = n; $('save').disabled = $('clear').disabled = false; msg('前回の記録（' + n + ' コマ）が残っています。「記録」で続きから、「停止」で書き出して終了。'); updateButtons(); } }; } catch(_){} };
     } catch(_){}
   })();
   function frames(mode2){ return idb.transaction('frames', mode2).objectStore('frames'); }
@@ -142,28 +149,43 @@
     navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false }).then(function(st){
       stream = st; $('v').srcObject = st;
       // 開始／一時停止。止めたあとにもう一度押すと同じ記録の続き（それまでのコマは消さない。新しい記録にするのは「破棄」のときだけ）
-      var resume = mode === 'log' && n > 0;
-      running = true; t0 = performance.now(); t0Epoch = Date.now(); if (!resume){ n = 0; bytes = 0; try { localStorage.setItem('eee-cam-start', String(t0Epoch)); } catch(_){} }
+      var resume = mode === 'log' && n > 0 && !finished;
+      if (mode === 'log' && !resume){ try { frames('readwrite').clear(); } catch(_){} }   // 新しい記録: 前の（書き出し済みの）コマを消す
+      finished = false; running = true; t0 = performance.now(); t0Epoch = Date.now(); if (!resume){ n = 0; bytes = 0; try { localStorage.setItem('eee-cam-start', String(t0Epoch)); } catch(_){} }
       if (mode === 'log'){ $('save').disabled = $('clear').disabled = true; }
       timer = setInterval(shot, 500);
       $('rec').classList.add('on'); $('sSt').textContent = mode === 'log' ? 'REC' : '送信'; if (mode === 'log') $('led').classList.add('on');
       $('mLive').disabled = $('mLog').disabled = true;
       if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function(){});
       msg(mode === 'log' ? (resume ? '続きから記録しています（' + n + ' コマのあとに追加）。' : '記録中。0.5 秒に 1 コマ、時刻つき。') : 'Mac へ送信中。中身ページのビューワーを「車載カメラ」にすると映ります。');
+      updateButtons();
     }).catch(function(err){ msg('カメラの許可が得られません: ' + err.message, 'err'); });
   }
   function stop(){
     running = false; if (timer){ clearInterval(timer); timer = null; } if (stream){ stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; }
     $('rec').classList.remove('on'); $('led').classList.remove('on'); $('sSt').textContent = '一時停止'; $('mLive').disabled = $('mLog').disabled = false;
-    if (mode === 'log'){ $('save').disabled = $('clear').disabled = n === 0; var st0 = null; try { st0 = +localStorage.getItem('eee-cam-start') || null; } catch(_){} stampName(false, st0); msg('一時停止中。' + n + ' コマ（' + (bytes / 1048576).toFixed(0) + 'MB）。「開始」で続きから、「書き出し」で .eeecam を保存。'); }
+    if (mode === 'log'){ $('save').disabled = $('clear').disabled = n === 0; var st0 = null; try { st0 = +localStorage.getItem('eee-cam-start') || null; } catch(_){} stampName(false, st0); msg('一時停止中。' + n + ' コマ（' + (bytes / 1048576).toFixed(0) + 'MB）。「記録」で続きから、「停止」で書き出して終了。'); }
     else msg(n + ' コマ送りました。');
+    updateButtons();
+  }
+  function updateButtons(){
+    var active = mode === 'log' && (running || (n > 0 && !finished));
+    $('recT').textContent = running ? '一時停止' : '記録';
+    $('finT').textContent = active ? '停止' : '記録';
+    $('fin').classList.toggle('on', running && mode === 'log');
   }
   $('rec').onclick = function(){ if (running) stop(); else start(); };
+  // 停止／記録: 記録中・一時停止中なら 停止＝止めて .eeecam を書き出して終える。終わっているか空なら 記録＝新しく始める
+  $('fin').onclick = function(){
+    var active = mode === 'log' && n > 0 && !finished;
+    if (active){ if (running) stop(); exportCam(true); return; }
+    start();
+  };
   document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible' && running && 'wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function(){}); });
 
   /* 書き出し: "EEECAM1\n" + 索引 { v:2, w, h, t0: 開始時刻(epoch ms), frames:[[tRel, off, len], ...] } + JPEG の連結。
      絶対時刻 = t0 + tRel。センサーログとは絶対時刻で合わせる（名前は関係ない） */
-  $('save').onclick = function(){
+  function exportCam(final){
     if (!idb) return;
     var idx = [], parts = [], off = 0, w = cw, h = ch, first = null;
     var cur = frames('readonly').openCursor();
@@ -176,10 +198,12 @@
       var name = (($('logName').value || '').trim() || 'cam').replace(/[\\/:*?"<>|\s]+/g, '_');
       var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name + '.eeecam';
       document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 8000);
-      msg(idx.length + ' コマ（' + (off / 1048576).toFixed(0) + 'MB）。共有シートで「ファイルに保存」か AirDrop → EEE の /inside か /map にドロップ。');
+      if (final){ finished = true; $('sSt').textContent = '停止'; updateButtons(); }
+      msg((final ? '停止して書き出しました。' : '') + idx.length + ' コマ（' + (off / 1048576).toFixed(0) + 'MB）。共有シートで「ファイルに保存」か AirDrop → EEE の /inside か /map にドロップ。' + (final ? ' 次に「記録」を押すと新しい記録になります。' : ''));
     };
-  };
-  $('clear').onclick = function(){ if (!confirm('この端末に残っているコマを消して、次は新しい記録にします。書き出していない場合は元に戻せません。よろしいですか？')) return; try { frames('readwrite').clear(); } catch(_){} n = 0; bytes = 0; $('sN').textContent = '0'; $('vN').textContent = ''; $('save').disabled = $('clear').disabled = true; msg('破棄しました。'); };
+  }
+  $('save').onclick = function(){ exportCam(false); };
+  $('clear').onclick = function(){ if (!confirm('この端末に残っているコマを消して、次は新しい記録にします。書き出していない場合は元に戻せません。よろしいですか？')) return; try { frames('readwrite').clear(); } catch(_){} n = 0; bytes = 0; finished = false; $('sN').textContent = '0'; $('vN').textContent = ''; $('save').disabled = $('clear').disabled = true; msg('破棄しました。'); updateButtons(); };
 })();
 </script>
 </html>
