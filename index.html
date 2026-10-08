@@ -60,7 +60,7 @@
 
   <div class="pl">撮影</div>
   <div class="btnrow">
-    <button class="rb big" id="rec"><div class="cap"></div><span class="t">開始／停止</span></button>
+    <button class="rb big" id="rec"><div class="cap"></div><span class="t">開始／一時停止</span></button>
     <div class="disp"><table>
       <tr><td>コマの大きさ</td><td id="rSz">480 px</td></tr>
       <tr><td>1 コマ</td><td id="rKb">—</td></tr>
@@ -74,7 +74,7 @@
     <input type="text" id="logName" placeholder="記録の名前">
     <div class="btnrow" style="grid-template-columns:1fr 1fr">
       <button class="rb" id="save" disabled><div class="cap"></div><span class="t">書き出し (.eeecam)</span></button>
-      <button class="rb" id="clear" disabled><div class="cap"></div><span class="t">破棄</span></button>
+      <button class="rb" id="clear" disabled><div class="cap"></div><span class="t">破棄（新しい記録へ）</span></button>
     </div>
     <div class="hint">書き出した .eeecam を Mac の EEE（/inside か /map）にドロップすると replay/logs/ に入り、同じ時間帯のセンサーログを再生したとき自動で一緒に出ます（名前を揃える必要なし）。<br>
       全線 30 分で 3,600 コマ・60〜80MB。撮影中は画面を消さないこと。iPhone の時計が合っていること（自動設定なら OK）。</div>
@@ -101,7 +101,7 @@
 
   // 名前欄（ログ）: 時刻を自動で
   var lastAuto = '';
-  function stampName(force){ var v = $('logName').value; if (!force && v && v !== lastAuto) return; var d = new Date(), p2 = function(x){ return (x < 10 ? '0' : '') + x; }; lastAuto = 'cam_' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + '_' + p2(d.getHours()) + p2(d.getMinutes()); $('logName').value = lastAuto; }
+  function stampName(force, when){ var v = $('logName').value; if (!force && v && v !== lastAuto) return; var d = when ? new Date(when) : new Date(), p2 = function(x){ return (x < 10 ? '0' : '') + x; }; lastAuto = 'cam_' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + '_' + p2(d.getHours()) + p2(d.getMinutes()); $('logName').value = lastAuto; }
   stampName(true);
 
   /* IndexedDB（ログ）: コマをそのまま積む。ブラウザが落ちても残る */
@@ -141,19 +141,21 @@
     if (!window.isSecureContext){ msg('HTTPS で開いてください（カメラの許可が出ません）', 'err'); return; }
     navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false }).then(function(st){
       stream = st; $('v').srcObject = st;
-      running = true; t0 = performance.now(); t0Epoch = Date.now(); n = 0; bytes = 0;
-      if (mode === 'log'){ try { frames('readwrite').clear(); } catch(_){} $('save').disabled = $('clear').disabled = true; }
+      // 開始／一時停止。止めたあとにもう一度押すと同じ記録の続き（それまでのコマは消さない。新しい記録にするのは「破棄」のときだけ）
+      var resume = mode === 'log' && n > 0;
+      running = true; t0 = performance.now(); t0Epoch = Date.now(); if (!resume){ n = 0; bytes = 0; try { localStorage.setItem('eee-cam-start', String(t0Epoch)); } catch(_){} }
+      if (mode === 'log'){ $('save').disabled = $('clear').disabled = true; }
       timer = setInterval(shot, 500);
       $('rec').classList.add('on'); $('sSt').textContent = mode === 'log' ? 'REC' : '送信'; if (mode === 'log') $('led').classList.add('on');
       $('mLive').disabled = $('mLog').disabled = true;
       if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(function(){});
-      msg(mode === 'log' ? '記録中。0.5 秒に 1 コマ、時刻つき。' : 'Mac へ送信中。中身ページのビューワーを「車載カメラ」にすると映ります。');
+      msg(mode === 'log' ? (resume ? '続きから記録しています（' + n + ' コマのあとに追加）。' : '記録中。0.5 秒に 1 コマ、時刻つき。') : 'Mac へ送信中。中身ページのビューワーを「車載カメラ」にすると映ります。');
     }).catch(function(err){ msg('カメラの許可が得られません: ' + err.message, 'err'); });
   }
   function stop(){
     running = false; if (timer){ clearInterval(timer); timer = null; } if (stream){ stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; }
-    $('rec').classList.remove('on'); $('led').classList.remove('on'); $('sSt').textContent = '停止'; $('mLive').disabled = $('mLog').disabled = false;
-    if (mode === 'log'){ $('save').disabled = $('clear').disabled = n === 0; stampName(); msg(n + ' コマ記録しました（' + (bytes / 1048576).toFixed(0) + 'MB）。「書き出し」で .eeecam を保存してください。'); }
+    $('rec').classList.remove('on'); $('led').classList.remove('on'); $('sSt').textContent = '一時停止'; $('mLive').disabled = $('mLog').disabled = false;
+    if (mode === 'log'){ $('save').disabled = $('clear').disabled = n === 0; var st0 = null; try { st0 = +localStorage.getItem('eee-cam-start') || null; } catch(_){} stampName(false, st0); msg('一時停止中。' + n + ' コマ（' + (bytes / 1048576).toFixed(0) + 'MB）。「開始」で続きから、「書き出し」で .eeecam を保存。'); }
     else msg(n + ' コマ送りました。');
   }
   $('rec').onclick = function(){ if (running) stop(); else start(); };
@@ -167,7 +169,7 @@
     var cur = frames('readonly').openCursor();
     cur.onsuccess = function(){
       var c = cur.result;
-      if (c){ var r = c.value; if (first === null) first = r.ts - r.t; idx.push([r.t, off, r.blob.size]); parts.push(r.blob); off += r.blob.size; w = r.w || w; h = r.h || h; c.continue(); return; }
+      if (c){ var r = c.value; if (first === null) first = r.ts; idx.push([r.ts - first, off, r.blob.size]); parts.push(r.blob); off += r.blob.size; w = r.w || w; h = r.h || h; c.continue(); return; }
       if (!idx.length){ msg('コマがありません。', 'err'); return; }
       var head = 'EEECAM1\n' + JSON.stringify({ v: 2, w: w, h: h, t0: first, frames: idx }) + '\n';
       var blob = new Blob([head].concat(parts), { type: 'application/octet-stream' });
@@ -177,7 +179,7 @@
       msg(idx.length + ' コマ（' + (off / 1048576).toFixed(0) + 'MB）。共有シートで「ファイルに保存」か AirDrop → EEE の /inside か /map にドロップ。');
     };
   };
-  $('clear').onclick = function(){ if (!confirm('記録を破棄します。よろしいですか？')) return; try { frames('readwrite').clear(); } catch(_){} n = 0; bytes = 0; $('sN').textContent = '0'; $('vN').textContent = ''; $('save').disabled = $('clear').disabled = true; msg('破棄しました。'); };
+  $('clear').onclick = function(){ if (!confirm('この端末に残っているコマを消して、次は新しい記録にします。書き出していない場合は元に戻せません。よろしいですか？')) return; try { frames('readwrite').clear(); } catch(_){} n = 0; bytes = 0; $('sN').textContent = '0'; $('vN').textContent = ''; $('save').disabled = $('clear').disabled = true; msg('破棄しました。'); };
 })();
 </script>
 </html>
